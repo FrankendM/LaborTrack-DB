@@ -456,6 +456,12 @@ if ($method === 'POST' && $action === 'approve') {
          WHERE  period_id = ?'
     )->execute(['Approved', currentAccountId(), $periodId]);
 
+    logAudit($pdo, 'payroll_approve', 'payroll_period', $periodId, [
+        'department_id' => (int)$period['department_id'],
+        'period_year'   => (int)$period['period_year'],
+        'period_month'  => (int)$period['period_month'],
+    ]);
+
     json_ok(['message' => 'Payroll period approved and locked.', 'period_id' => $periodId]);
 }
 
@@ -481,6 +487,16 @@ if ($method === 'POST' && $action === 'unapprove') {
          WHERE  period_id = ?'
     )->execute(['Draft', $periodId]);
 
+<<<<<<< HEAD
+    logAudit($pdo, 'payroll_unapprove', 'payroll_period', $periodId, [
+        'department_id'        => (int)$period['department_id'],
+        'period_year'          => (int)$period['period_year'],
+        'period_month'         => (int)$period['period_month'],
+        'previously_approved_by' => $period['approved_by'] !== null ? (int)$period['approved_by'] : null,
+    ]);
+
+=======
+>>>>>>> origin/main
     json_ok(['message' => 'Payroll period reverted to Draft.', 'period_id' => $periodId]);
 }
 

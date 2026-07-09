@@ -96,3 +96,38 @@ function requireAdmin(): void {
     requireAuth();
     if (currentAccessLevel() !== 'admin') json_err('Forbidden. Admins only.', 403);
 }
+
+// ── Audit log ──────────────────────────────────────────────────────────────────
+// Writes one row to audit_log. Never throws out to the caller — a logging
+// failure should not block or roll back the action that triggered it, so
+// errors are swallowed after being reported to the PHP error log.
+//
+//   $action     one of: account_create, account_update, account_delete,
+//               payroll_approve, payroll_unapprove
+//   $targetType e.g. 'account', 'payroll_period'
+//   $targetId   id of the affected row (nullable, e.g. after a delete)
+//   $details    associative array of context (old/new values, etc.); stored as JSON
+function logAudit(
+    PDO $pdo,
+    string $action,
+    string $targetType,
+    ?int $targetId,
+    ?array $details = null
+): void {
+    try {
+        $stmt = $pdo->prepare(
+            'INSERT INTO audit_log (account_id, username_snapshot, action, target_type, target_id, details)
+             VALUES (?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            currentAccountId(),
+            $_SESSION['username'] ?? 'system',
+            $action,
+            $targetType,
+            $targetId,
+            $details !== null ? json_encode($details) : null,
+        ]);
+    } catch (Throwable $e) {
+        error_log('[audit_log] failed to write entry: ' . $e->getMessage());
+    }
+}
