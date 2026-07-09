@@ -1,12 +1,9 @@
 <?php
-// =============================================================================
 // routes/accounts.php — Account management (admin only)
-//
 // GET    /backend/routes/accounts.php        → list all accounts
 // POST   /backend/routes/accounts.php        → create account
 // PUT    /backend/routes/accounts.php        → update account
 // DELETE /backend/routes/accounts.php?id=X   → delete account
-// =============================================================================
 
 declare(strict_types=1);
 
@@ -17,7 +14,7 @@ header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// ── GET ───────────────────────────────────────────────────────────────────────
+// ── GET
 if ($method === 'GET') {
     requireAdmin();
 
@@ -40,7 +37,7 @@ if ($method === 'GET') {
     ], $rows));
 }
 
-// ── POST: create ──────────────────────────────────────────────────────────────
+// ── POST: create 
 if ($method === 'POST') {
     requireAdmin();
 
@@ -85,11 +82,19 @@ if ($method === 'POST') {
          VALUES (?, ?, ?, ?, ?)'
     );
     $stmt->execute([$employeeId ?: null, $username, $hash, $email, $accessLevel]);
+    $newAccountId = (int)$pdo->lastInsertId();
 
-    json_ok(['account_id' => (int)$pdo->lastInsertId(), 'message' => 'Account created successfully.']);
+    logAudit($pdo, 'account_create', 'account', $newAccountId, [
+        'username'     => $username,
+        'email'        => $email,
+        'access_level' => $accessLevel,
+        'employee_id'  => $employeeId ?: null,
+    ]);
+
+    json_ok(['account_id' => $newAccountId, 'message' => 'Account created successfully.']);
 }
 
-// ── PUT: update ───────────────────────────────────────────────────────────────
+// ── PUT: update 
 if ($method === 'PUT') {
     requireAdmin();
 
@@ -105,32 +110,38 @@ if ($method === 'PUT') {
     if (!$accountId) json_err('account_id is required.');
 
     $pdo = getDB();
-    $acc = $pdo->prepare('SELECT account_id FROM accounts WHERE account_id = ? LIMIT 1');
+    $acc = $pdo->prepare('SELECT account_id, username, email, access_level, employee_id FROM accounts WHERE account_id = ? LIMIT 1');
     $acc->execute([$accountId]);
-    if (!$acc->fetch()) json_err('Account not found.', 404);
+    $before = $acc->fetch();
+    if (!$before) json_err('Account not found.', 404);
 
-    $fields = [];
-    $params = [];
+    $fields  = [];
+    $params  = [];
+    $changed = []; // for audit log: field => ['from' => ..., 'to' => ...]
 
     if ($username !== '') {
         $dup = $pdo->prepare('SELECT account_id FROM accounts WHERE username = ? AND account_id != ? LIMIT 1');
         $dup->execute([$username, $accountId]);
         if ($dup->fetch()) json_err('That username is already taken.');
         $fields[] = 'username = ?'; $params[] = $username;
+        if ($username !== $before['username']) $changed['username'] = ['from' => $before['username'], 'to' => $username];
     }
     if ($email !== '') {
         $dup = $pdo->prepare('SELECT account_id FROM accounts WHERE email = ? AND account_id != ? LIMIT 1');
         $dup->execute([$email, $accountId]);
         if ($dup->fetch()) json_err('That email is already in use.');
         $fields[] = 'email = ?'; $params[] = $email;
+        if ($email !== $before['email']) $changed['email'] = ['from' => $before['email'], 'to' => $email];
     }
     if ($accessLevel !== '' && in_array($accessLevel, ['admin', 'employee'], true)) {
         $fields[] = 'access_level = ?'; $params[] = $accessLevel;
+        if ($accessLevel !== $before['access_level']) $changed['access_level'] = ['from' => $before['access_level'], 'to' => $accessLevel];
     }
     if ($password !== '') {
         if (strlen($password) < 6) json_err('Password must be at least 6 characters.');
         $fields[] = 'password_hash = ?';
         $params[] = password_hash($password, PASSWORD_BCRYPT);
+        $changed['password'] = ['from' => '(hidden)', 'to' => '(changed)'];
     }
     if ($hasEmpKey) {
         if ($employeeId) {
@@ -143,8 +154,14 @@ if ($method === 'PUT') {
             if ($dup->fetch()) json_err('This employee already has an account.');
 
             $fields[] = 'employee_id = ?'; $params[] = $employeeId;
+            if ($employeeId !== (int)($before['employee_id'] ?? 0)) {
+                $changed['employee_id'] = ['from' => $before['employee_id'], 'to' => $employeeId];
+            }
         } else {
             $fields[] = 'employee_id = NULL';
+            if ($before['employee_id'] !== null) {
+                $changed['employee_id'] = ['from' => $before['employee_id'], 'to' => null];
+            }
         }
     }
 
@@ -154,10 +171,14 @@ if ($method === 'PUT') {
     $pdo->prepare('UPDATE accounts SET ' . implode(', ', $fields) . ' WHERE account_id = ?')
         ->execute($params);
 
+    if (!empty($changed)) {
+        logAudit($pdo, 'account_update', 'account', $accountId, $changed);
+    }
+
     json_ok(['message' => 'Account updated successfully.']);
 }
 
-// ── DELETE ────────────────────────────────────────────────────────────────────
+// ── DELETE
 if ($method === 'DELETE') {
     requireAdmin();
 
@@ -165,10 +186,19 @@ if ($method === 'DELETE') {
     if (!$id) json_err('id query param is required.');
     if ($id === currentAccountId()) json_err('You cannot delete your own account.');
 
-    $pdo  = getDB();
+    $pdo = getDB();
+
+    // Snapshot before deleting so the audit entry stays meaningful afterward.
+    $snap = $pdo->prepare('SELECT username, email, access_level FROM accounts WHERE account_id = ? LIMIT 1');
+    $snap->execute([$id]);
+    $deletedAccount = $snap->fetch();
+    if (!$deletedAccount) json_err('Account not found.', 404);
+
     $stmt = $pdo->prepare('DELETE FROM accounts WHERE account_id = ?');
     $stmt->execute([$id]);
     if ($stmt->rowCount() === 0) json_err('Account not found.', 404);
+
+    logAudit($pdo, 'account_delete', 'account', $id, $deletedAccount);
 
     json_ok(['message' => 'Account deleted.']);
 }
