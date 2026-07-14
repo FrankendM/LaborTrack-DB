@@ -1,14 +1,4 @@
 <?php
-// list all periods (admin)
-// periods for one dept (admin)
-// 
-// compute without saving (admin)
-// create Draft period (admin)
-// all records in period (admin)
-// edit one Draft record (admin)
-// approve whole period (admin)
-// own approved records (employee)
-
 
 declare(strict_types=1);
 
@@ -23,15 +13,6 @@ $pdo    = getDB();
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// HELPERS
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Compute payroll figures for every active employee in a department
- * for a given year/month. Returns an array keyed by employee_id.
- * Does NOT write to the database.
- */
 function computePayroll(PDO $pdo, int $deptId, int $year, int $month): array {
     // Date range for the month
     $from = sprintf('%04d-%02d-01', $year, $month);
