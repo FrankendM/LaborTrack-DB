@@ -1,13 +1,4 @@
 <?php
-// =============================================================================
-// routes/roles.php — Role CRUD
-//
-// GET    /backend/routes/roles.php        → list all (auth required)
-// POST   /backend/routes/roles.php        → create (admin only)
-// PUT    /backend/routes/roles.php        → update (admin only)
-// DELETE /backend/routes/roles.php?id=X   → delete (admin only)
-// =============================================================================
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/db.php';
@@ -16,7 +7,7 @@ require_once __DIR__ . '/../middleware/helpers.php';
 header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
-
+// list all roles
 if ($method === 'GET') {
     requireAuth();
     $rows = getDB()->query(
@@ -32,7 +23,7 @@ if ($method === 'GET') {
         'employee_count' => (int)$r['employee_count'],
     ], $rows));
 }
-
+//create
 if ($method === 'POST') {
     requireAdmin();
     $body = bodyJson();
@@ -42,7 +33,7 @@ if ($method === 'POST') {
     $pdo->prepare('INSERT INTO roles (role_name) VALUES (?)')->execute([$name]);
     json_ok(['role_id' => (int)$pdo->lastInsertId(), 'message' => 'Role created.']);
 }
-
+//update
 if ($method === 'PUT') {
     requireAdmin();
     $body = bodyJson();
