@@ -124,9 +124,7 @@ function castPeriod(array $r): array {
     ];
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // GET: list periods (admin)
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'GET' && $action === 'periods') {
     requireAdmin();
 
@@ -153,9 +151,7 @@ if ($method === 'GET' && $action === 'periods') {
     json_ok(array_map('castPeriod', $stmt->fetchAll()));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // GET: preview (compute without saving)
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'GET' && $action === 'preview') {
     requireAdmin();
 
@@ -188,9 +184,7 @@ if ($method === 'GET' && $action === 'preview') {
     ]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // GET: records in a period (admin)
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'GET' && $action === 'records') {
     requireAdmin();
 
@@ -224,9 +218,8 @@ if ($method === 'GET' && $action === 'records') {
     ]);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+
 // GET: my_history (employee sees own approved records)
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'GET' && $action === 'my_history') {
     requireAuth();
 
@@ -254,9 +247,7 @@ if ($method === 'GET' && $action === 'my_history') {
     ]), $rows));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // POST: generate — create Draft period + records
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'POST' && $action === 'generate') {
     requireAdmin();
 
@@ -346,9 +337,7 @@ if ($method === 'POST' && $action === 'generate') {
     ], 201);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // PUT: edit one record in a Draft period (admin)
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'PUT' && $action === 'record') {
     requireAdmin();
 
@@ -414,9 +403,7 @@ if ($method === 'PUT' && $action === 'record') {
     json_ok(castRecord($updated->fetch()));
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 // POST: approve — lock the whole period
-// ─────────────────────────────────────────────────────────────────────────────
 if ($method === 'POST' && $action === 'approve') {
     requireAdmin();
 
@@ -446,7 +433,7 @@ if ($method === 'POST' && $action === 'approve') {
     json_ok(['message' => 'Payroll period approved and locked.', 'period_id' => $periodId]);
 }
 
-// ── POST: unapprove (revert Approved → Draft) ─────────────────────────────────
+// POST: unapprove (revert Approved - Draft) 
 if ($method === 'POST' && $action === 'unapprove') {
     requireAdmin();
 
