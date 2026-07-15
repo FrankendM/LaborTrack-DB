@@ -1,17 +1,15 @@
 <?php
-// =============================================================================
 // middleware/helpers.php — Shared auth helpers, JSON responses, input casting
-//
 // Session shape (set on successful login, see routes/auth.php):
 //   $_SESSION['account_id']    (int)
 //   $_SESSION['employee_id']   (int|null)
 //   $_SESSION['access_level']  ('admin'|'employee')
 //   $_SESSION['username']      (string)
-// =============================================================================
+
 
 declare(strict_types=1);
 
-// ── CORS ─────────────────────────────────────────────────────────────────────
+// CORS 
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
 
 if (
@@ -32,7 +30,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit;
 }
 
-// ── Session ───────────────────────────────────────────────────────────────────
+// Session 
 if (session_status() === PHP_SESSION_NONE) {
     session_set_cookie_params([
         'lifetime' => 0,
@@ -45,7 +43,7 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ── JSON response helpers ─────────────────────────────────────────────────────
+// JSON response helpers
 function json_ok($data, int $status = 200): void {
     http_response_code($status);
     echo json_encode(['success' => true, 'data' => $data]);
@@ -58,7 +56,7 @@ function json_err(string $message, int $status = 400): void {
     exit;
 }
 
-// ── Request body helper ───────────────────────────────────────────────────────
+//Request body helper 
 function bodyJson(): array {
     $raw    = file_get_contents('php://input');
     if ($raw === false || $raw === '') return [];
@@ -66,7 +64,7 @@ function bodyJson(): array {
     return is_array($parsed) ? $parsed : [];
 }
 
-// ── Input casting helpers ─────────────────────────────────────────────────────
+// Input casting helpers 
 function str(array $body, string $key, string $default = ''): string {
     if (!isset($body[$key]) || $body[$key] === null) return $default;
     return trim((string)$body[$key]);
@@ -82,7 +80,7 @@ function floatVal_(array $body, string $key, float $default = 0.0): float {
     return (float)$body[$key];
 }
 
-// ── Auth helpers ──────────────────────────────────────────────────────────────
+// Auth helpers 
 function isLoggedIn(): bool          { return isset($_SESSION['account_id']); }
 function currentAccountId(): ?int    { return $_SESSION['account_id']   ?? null; }
 function currentEmployeeId(): ?int   { return $_SESSION['employee_id']  ?? null; }
