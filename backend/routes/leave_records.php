@@ -1,17 +1,4 @@
 <?php
-// =============================================================================
-// routes/leave_records.php — Leave request management
-//
-// GET    /backend/routes/leave_records.php        → list (admin: all; employee: own)
-// POST   /backend/routes/leave_records.php        → file leave request
-// PUT    /backend/routes/leave_records.php        → approve/reject (admin) or edit pending (employee)
-// DELETE /backend/routes/leave_records.php?id=X   → admin delete or employee cancel pending
-//
-// Query params for GET (admin only):
-//   employee_id=X
-//   status=Pending|Approved|Rejected
-// =============================================================================
-
 declare(strict_types=1);
 
 require_once __DIR__ . '/../config/db.php';
