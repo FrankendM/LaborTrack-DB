@@ -1,9 +1,4 @@
 <?php
-// GET    /backend/routes/employees.php        → list all (auth required)
-// GET    /backend/routes/employees.php?id=X   → single employee
-// POST   /backend/routes/employees.php        → create (admin only)
-// PUT    /backend/routes/employees.php        → update (admin only)
-// DELETE /backend/routes/employees.php?id=X   → delete (admin only)
 
 declare(strict_types=1);
 
@@ -14,11 +9,11 @@ header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// List all employees
+// List employees
 if ($method === 'GET') {
     requireAuth();
     $pdo = getDB();
-
+    //single employee
     if (isset($_GET['id'])) {
         $id = (int)$_GET['id'];
         if (currentAccessLevel() !== 'admin' && $id !== currentEmployeeId()) {
@@ -36,7 +31,7 @@ if ($method === 'GET') {
         if (!$emp) json_err('Employee not found.', 404);
         json_ok(castEmployee($emp));
     }
-
+    //all employee
     if (currentAccessLevel() === 'admin') {
         $rows = $pdo->query(
             'SELECT e.*, d.department_name, r.role_name
@@ -48,6 +43,7 @@ if ($method === 'GET') {
     } elseif (currentEmployeeId() === null) {
         json_ok([]);
     } else {
+        //self
         $stmt = $pdo->prepare(
             'SELECT e.*, d.department_name, r.role_name
              FROM   employees e
