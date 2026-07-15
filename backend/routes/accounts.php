@@ -14,7 +14,7 @@ header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
-// ── GET
+// admin side GET all accounts
 if ($method === 'GET') {
     requireAdmin();
 
@@ -37,7 +37,7 @@ if ($method === 'GET') {
     ], $rows));
 }
 
-// ── POST: create 
+// POST create account 
 if ($method === 'POST') {
     requireAdmin();
 
@@ -94,7 +94,7 @@ if ($method === 'POST') {
     json_ok(['account_id' => $newAccountId, 'message' => 'Account created successfully.']);
 }
 
-// ── PUT: update 
+// PUT update account admin side
 if ($method === 'PUT') {
     requireAdmin();
 
@@ -178,7 +178,7 @@ if ($method === 'PUT') {
     json_ok(['message' => 'Account updated successfully.']);
 }
 
-// ── DELETE
+// DELETE
 if ($method === 'DELETE') {
     requireAdmin();
 
