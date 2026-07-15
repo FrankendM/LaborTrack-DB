@@ -11,7 +11,7 @@ header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 $action = $_GET['action'] ?? '';
 
-// ── POST: login ───────────────────────────────────────────────────────────────
+// POST login
 if ($method === 'POST' && $action === 'login') {
     $body     = bodyJson();
     $username = str($body, 'username');
@@ -52,7 +52,7 @@ if ($method === 'POST' && $action === 'login') {
     ]);
 }
 
-// ── POST: logout ──────────────────────────────────────────────────────────────
+//  POST logout
 if ($method === 'POST' && $action === 'logout') {
     $_SESSION = [];
     if (ini_get('session.use_cookies')) {
@@ -63,7 +63,7 @@ if ($method === 'POST' && $action === 'logout') {
     json_ok(['message' => 'Logged out.']);
 }
 
-// ── GET: current session ──────────────────────────────────────────────────────
+// GET current session
 if ($method === 'GET' && $action === 'me') {
     requireAuth();
     json_ok([
@@ -74,7 +74,7 @@ if ($method === 'GET' && $action === 'me') {
     ]);
 }
 
-// ── POST: change password ─────────────────────────────────────────────────────
+//  POST change password 
 if ($method === 'POST' && $action === 'change_password') {
     requireAuth();
 
