@@ -16,7 +16,7 @@ require_once __DIR__ . '/../middleware/helpers.php';
 header('Content-Type: application/json');
 
 requireAuth();
-requireAdmin();
+requirePayrollAdmin();
 
 $pdo    = getDB();
 $method = $_SERVER['REQUEST_METHOD'];

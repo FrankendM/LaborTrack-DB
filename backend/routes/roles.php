@@ -25,7 +25,7 @@ if ($method === 'GET') {
 }
 //create
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $name = str($body, 'role_name');
     if ($name === '') json_err('role_name is required.');
@@ -35,7 +35,7 @@ if ($method === 'POST') {
 }
 //update
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $id   = intVal_($body, 'role_id');
     $name = str($body, 'role_name');
@@ -48,7 +48,7 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
     $id = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');
     $pdo = getDB();

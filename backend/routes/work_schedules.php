@@ -29,7 +29,7 @@ if ($method === 'GET') {
 
 // POST — create
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $name  = str($body, 'schedule_name');
     $start = str($body, 'start_time');
@@ -46,7 +46,7 @@ if ($method === 'POST') {
 
 // PUT — update
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
     $body  = bodyJson();
     $id    = intVal_($body, 'schedule_id');
     $name  = str($body, 'schedule_name');
@@ -66,7 +66,7 @@ if ($method === 'PUT') {
 
 // DELETE
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
     $id = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');
     $pdo  = getDB();

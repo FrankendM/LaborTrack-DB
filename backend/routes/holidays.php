@@ -35,7 +35,7 @@ if ($method === 'GET') {
 
 // POST — create
 if ($method === 'POST') {
-    requireAdmin();
+    requirePayrollAdmin();
     $body = bodyJson();
     $date = str($body, 'holiday_date');
     $name = str($body, 'holiday_name');
@@ -63,7 +63,7 @@ if ($method === 'POST') {
 
 // PUT — update
 if ($method === 'PUT') {
-    requireAdmin();
+    requirePayrollAdmin();
     $body = bodyJson();
     $id   = intVal_($body, 'holiday_id');
     $date = str($body, 'holiday_date');
@@ -95,7 +95,7 @@ if ($method === 'PUT') {
 
 // DELETE
 if ($method === 'DELETE') {
-    requireAdmin();
+    requirePayrollAdmin();
     $id   = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');
     $stmt = getDB()->prepare('DELETE FROM holidays WHERE holiday_id = ?');

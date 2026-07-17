@@ -26,7 +26,7 @@ if ($method === 'GET') {
 
 // POST — create new leave type (admin only)
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
     $body   = bodyJson();
     $name   = str($body, 'leave_name');
     $isPaid = isset($body['is_paid']) ? (int)(bool)$body['is_paid'] : 1;
@@ -42,7 +42,7 @@ if ($method === 'POST') {
 
 // PUT — update leave type (admin only)
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
     $body   = bodyJson();
     $id     = intVal_($body, 'leave_type_id');
     $name   = str($body, 'leave_name');
@@ -59,7 +59,7 @@ if ($method === 'PUT') {
 
 // DELETE — delete leave type (admin only)
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $id   = intVal_($body, 'leave_type_id');
 

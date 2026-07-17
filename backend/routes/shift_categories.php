@@ -21,7 +21,7 @@ if ($method === 'GET') {
 }
 //create
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $name = str($body, 'category_name');
     if ($name === '') json_err('category_name is required.');
@@ -39,7 +39,7 @@ if ($method === 'POST') {
 }
 //update
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $id   = intVal_($body, 'shift_category_id');
     if (!$id) json_err('shift_category_id is required.');
@@ -60,7 +60,7 @@ if ($method === 'PUT') {
 }
 
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
     $id = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');
     $pdo = getDB();

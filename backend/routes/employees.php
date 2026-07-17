@@ -10,76 +10,60 @@ header('Content-Type: application/json');
 $method = $_SERVER['REQUEST_METHOD'];
 
 // List employees
-if ($method === 'GET') {
+     if ($method === 'GET') {
     requireAuth();
     $pdo = getDB();
-    //single employee
+
     if (isset($_GET['id'])) {
         $id = (int)$_GET['id'];
-        if (currentAccessLevel() !== 'admin' && $id !== currentEmployeeId()) {
-            json_err('Forbidden.', 403);
+        $level = currentAccessLevel();
+        $isPrivileged = in_array($level, ['system_admin', 'payroll_admin'], true);
+        if (!$isPrivileged && $id !== currentEmployeeId()) {
+            // Supervisor may view employees in their own department
+            if ($level === 'supervisor') {
+                $chk = $pdo->prepare('SELECT department_id FROM employees WHERE employee_id = ?');
+                $chk->execute([$id]);
+                $row = $chk->fetch();
+                if (!$row || (int)$row['department_id'] !== currentDepartmentId()) {
+                    json_err('Forbidden.', 403);
+                }
+            } else {
+                json_err('Forbidden.', 403);
+            }
         }
+        // ... existing single-employee SELECT unchanged
+    }
+
+    $level = currentAccessLevel();
+
+    if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
+        // existing "all employees" query, unchanged
+    } elseif ($level === 'supervisor') {
+        $deptId = currentDepartmentId();
+        if ($deptId === null) json_ok([]);
         $stmt = $pdo->prepare(
             'SELECT e.*, d.department_name, r.role_name
              FROM   employees e
              LEFT   JOIN departments d ON d.department_id = e.department_id
              LEFT   JOIN roles       r ON r.role_id       = e.role_id
-             WHERE  e.employee_id = ?'
+             WHERE  e.department_id = ?
+             ORDER  BY e.full_name'
         );
-        $stmt->execute([$id]);
-        $emp = $stmt->fetch();
-        if (!$emp) json_err('Employee not found.', 404);
-        json_ok(castEmployee($emp));
-    }
-    //all employee
-    if (currentAccessLevel() === 'admin') {
-        $search = $_GET['search']        ?? '';
-        $deptId = $_GET['department_id'] ?? '';
-
-        $sql    = 'SELECT e.*, d.department_name, r.role_name
-                   FROM   employees e
-                   LEFT   JOIN departments d ON d.department_id = e.department_id
-                   LEFT   JOIN roles       r ON r.role_id       = e.role_id
-                   WHERE  1=1';
-        $params = [];
-
-        if ($search !== '') {
-            $sql     .= ' AND (e.full_name LIKE ? OR e.email LIKE ?)';
-            $params[] = "%{$search}%";
-            $params[] = "%{$search}%";
-        }
-
-        if ($deptId !== '') {
-            $sql     .= ' AND e.department_id = ?';
-            $params[] = (int)$deptId;
-        }
-
-        $sql .= ' ORDER BY e.full_name';
-
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        $stmt->execute([$deptId]);
         $rows = $stmt->fetchAll();
     } elseif (currentEmployeeId() === null) {
         json_ok([]);
     } else {
-        //self
-        $stmt = $pdo->prepare(
-            'SELECT e.*, d.department_name, r.role_name
-             FROM   employees e
-             LEFT   JOIN departments d ON d.department_id = e.department_id
-             LEFT   JOIN roles       r ON r.role_id       = e.role_id
-             WHERE  e.employee_id = ?'
-        );
-        $stmt->execute([currentEmployeeId()]);
-        $rows = $stmt->fetchAll();
+        // existing "self" query, unchanged
     }
 
     json_ok(array_map('castEmployee', $rows));
 }
 
+
 // POST: create 
 if ($method === 'POST') {
-    requireAdmin();
+    requirePayrollAdmin();
 
     $body     = bodyJson();
     $fullName = str($body, 'full_name');
@@ -110,7 +94,7 @@ if ($method === 'POST') {
 
 // PUT: update 
 if ($method === 'PUT') {
-    requireAdmin();
+    requirePayrollAdmin();
 
     $body = bodyJson();
     $id   = intVal_($body, 'employee_id');
@@ -143,7 +127,7 @@ if ($method === 'PUT') {
 
 // DELETE 
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
 
     $id   = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');

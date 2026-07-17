@@ -37,7 +37,7 @@ if ($method === 'GET') {
 }
 //create dept
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $name = str($body, 'department_name');
     $code = str($body, 'department_code');
@@ -53,7 +53,7 @@ if ($method === 'POST') {
 }
 //update dept
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
     $body = bodyJson();
     $id   = intVal_($body, 'department_id');
     if (!$id) json_err('department_id is required.');
@@ -75,7 +75,7 @@ if ($method === 'PUT') {
 }
 //delete dept
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
     $id = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');
 

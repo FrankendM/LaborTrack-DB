@@ -10,7 +10,7 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 // admin side GET all accounts
 if ($method === 'GET') {
-    requireAdmin();
+    requireSystemAdmin();
 
     $pdo  = getDB();
     $search = $_GET['search'] ?? '';
@@ -43,7 +43,7 @@ if ($method === 'GET') {
 
 // POST create account 
 if ($method === 'POST') {
-    requireAdmin();
+    requireSystemAdmin();
 
     $body        = bodyJson();
     $employeeId  = intVal_($body, 'employee_id');
@@ -55,8 +55,8 @@ if ($method === 'POST') {
     if ($username === '')  json_err('username is required.');
     if ($password === '')  json_err('password is required.');
     if ($email === '')     json_err('email is required.');
-    if (!in_array($accessLevel, ['admin', 'employee'], true)) {
-        json_err('access_level must be "admin" or "employee".');
+    if (!in_array($accessLevel, ['employee', 'supervisor', 'payroll_admin', 'system_admin'], true)) {
+        json_err('access_level must be employee, supervisor, payroll_admin, or system_admin.');
     }
     if (strlen($password) < 6) json_err('Password must be at least 6 characters.');
 
@@ -100,7 +100,7 @@ if ($method === 'POST') {
 
 // PUT update account admin side
 if ($method === 'PUT') {
-    requireAdmin();
+    requireSystemAdmin();
 
     $body        = bodyJson();
     $accountId   = intVal_($body, 'account_id');
@@ -137,7 +137,7 @@ if ($method === 'PUT') {
         $fields[] = 'email = ?'; $params[] = $email;
         if ($email !== $before['email']) $changed['email'] = ['from' => $before['email'], 'to' => $email];
     }
-    if ($accessLevel !== '' && in_array($accessLevel, ['admin', 'employee'], true)) {
+    if ($accessLevel !== '' && in_array($accessLevel, ['employee', 'supervisor', 'payroll_admin', 'system_admin'], true)) {
         $fields[] = 'access_level = ?'; $params[] = $accessLevel;
         if ($accessLevel !== $before['access_level']) $changed['access_level'] = ['from' => $before['access_level'], 'to' => $accessLevel];
     }
@@ -184,7 +184,7 @@ if ($method === 'PUT') {
 
 // DELETE
 if ($method === 'DELETE') {
-    requireAdmin();
+    requireSystemAdmin();
 
     $id = intVal_($_GET, 'id');
     if (!$id) json_err('id query param is required.');

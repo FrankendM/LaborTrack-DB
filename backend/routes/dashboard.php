@@ -16,47 +16,58 @@ requireAuth();
 $pdo   = getDB();
 $today = (new DateTime())->format('Y-m-d');
 
-// ADMIN DASHBOARD
-if (currentAccessLevel() === 'admin') {
+// Builds the admin-style dashboard payload. When $deptId is null the figures
+// are company-wide (System Admin / Payroll Admin); when set, every query is
+// scoped to that one department (Supervisor).
+function buildAdminDashboard(PDO $pdo, string $today, ?int $deptId): array {
+    $deptFilterEmp = $deptId !== null ? ' AND department_id = ' . $deptId : '';
+    $deptFilterE   = $deptId !== null ? ' AND e.department_id = ' . $deptId : '';
 
     $totalEmployees = (int)$pdo->query(
-        "SELECT COUNT(*) FROM employees"
+        "SELECT COUNT(*) FROM employees WHERE 1=1{$deptFilterEmp}"
     )->fetchColumn();
 
     $activeEmployees = (int)$pdo->query(
-        "SELECT COUNT(*) FROM employees WHERE employment_status = 'Active'"
+        "SELECT COUNT(*) FROM employees WHERE employment_status = 'Active'{$deptFilterEmp}"
     )->fetchColumn();
 
     $presentToday = (int)$pdo->query(
-        "SELECT COUNT(DISTINCT employee_id)
-         FROM   time_logs
-         WHERE  DATE(clock_in) = '$today'"
+        "SELECT COUNT(DISTINCT tl.employee_id)
+         FROM   time_logs tl
+         JOIN   employees e ON e.employee_id = tl.employee_id
+         WHERE  DATE(tl.clock_in) = '$today'{$deptFilterE}"
     )->fetchColumn();
 
     $lateToday = (int)$pdo->query(
         "SELECT COUNT(DISTINCT tl.employee_id)
          FROM   time_logs tl
-         JOIN   attendance_status ast ON ast.status_id = tl.status_id
+         JOIN   employees e             ON e.employee_id  = tl.employee_id
+         JOIN   attendance_status ast   ON ast.status_id  = tl.status_id
          WHERE  DATE(tl.clock_in) = '$today'
-         AND    LOWER(ast.status_label) LIKE '%late%'"
+         AND    LOWER(ast.status_label) LIKE '%late%'{$deptFilterE}"
     )->fetchColumn();
 
     $onLeaveToday = (int)$pdo->query(
-        "SELECT COUNT(DISTINCT employee_id)
-         FROM   leave_records
-         WHERE  leave_status = 'Approved'
-         AND    date_from <= '$today'
-         AND    date_to   >= '$today'"
+        "SELECT COUNT(DISTINCT lr.employee_id)
+         FROM   leave_records lr
+         JOIN   employees e ON e.employee_id = lr.employee_id
+         WHERE  lr.leave_status = 'Approved'
+         AND    lr.date_from <= '$today'
+         AND    lr.date_to   >= '$today'{$deptFilterE}"
     )->fetchColumn();
 
     $notClockedIn = max(0, $activeEmployees - $presentToday - $onLeaveToday);
 
-    //Pending leave requests 
+    // Pending leave requests
     $pendingLeaves = (int)$pdo->query(
-        "SELECT COUNT(*) FROM leave_records WHERE leave_status = 'Pending'"
+        "SELECT COUNT(*)
+         FROM   leave_records lr
+         JOIN   employees e ON e.employee_id = lr.employee_id
+         WHERE  lr.leave_status = 'Pending'{$deptFilterE}"
     )->fetchColumn();
 
-    // Department breakdown 
+    // Department breakdown — a single row (their own dept) when scoped
+    $deptWhere = $deptId !== null ? " WHERE d.department_id = {$deptId}" : '';
     $deptRows = $pdo->query(
         "SELECT d.department_id,
                 d.department_name,
@@ -70,6 +81,7 @@ if (currentAccessLevel() === 'admin') {
          LEFT JOIN  employees e   ON e.department_id   = d.department_id
          LEFT JOIN  time_logs tl  ON tl.employee_id    = e.employee_id
          LEFT JOIN  attendance_status ast ON ast.status_id = tl.status_id
+         {$deptWhere}
          GROUP BY   d.department_id, d.department_name
          ORDER BY   d.department_name"
     )->fetchAll();
@@ -82,7 +94,7 @@ if (currentAccessLevel() === 'admin') {
         'late_today'      => (int)$r['late_today'],
     ], $deptRows);
 
-    //Recent clock-ins (last 10)
+    // Recent clock-ins (last 10)
     $recentRows = $pdo->query(
         "SELECT tl.log_id, tl.employee_id, e.full_name,
                 tl.clock_in, tl.clock_out, tl.total_hours,
@@ -92,6 +104,7 @@ if (currentAccessLevel() === 'admin') {
          JOIN   employees e              ON e.employee_id           = tl.employee_id
          LEFT JOIN attendance_status ast ON ast.status_id           = tl.status_id
          LEFT JOIN shift_categories sc  ON sc.shift_category_id    = tl.shift_category_id
+         WHERE  1=1{$deptFilterE}
          ORDER  BY tl.clock_in DESC
          LIMIT  10"
     )->fetchAll();
@@ -107,7 +120,7 @@ if (currentAccessLevel() === 'admin') {
         'category_name' => $r['category_name'],
     ], $recentRows);
 
-    //  Weekly attendance (TSK-36)
+    // Weekly attendance (TSK-36)
     // Build Mon–Sun for the current ISO week; count present/late/absent per day.
     $weekStart = (new DateTime())->modify('Monday this week')->setTime(0, 0, 0);
     $weeklyAttendance = [];
@@ -122,27 +135,30 @@ if (currentAccessLevel() === 'admin') {
         $presentCnt = (int)$pdo->query(
             "SELECT COUNT(DISTINCT tl.employee_id)
              FROM   time_logs tl
+             JOIN   employees e ON e.employee_id = tl.employee_id
              LEFT JOIN attendance_status ast ON ast.status_id = tl.status_id
              WHERE  DATE(tl.clock_in) = '$dayStr'
-             AND    (ast.status_label IS NULL OR LOWER(ast.status_label) NOT LIKE '%late%')"
+             AND    (ast.status_label IS NULL OR LOWER(ast.status_label) NOT LIKE '%late%'){$deptFilterE}"
         )->fetchColumn();
 
         // Late
         $lateCnt = (int)$pdo->query(
             "SELECT COUNT(DISTINCT tl.employee_id)
              FROM   time_logs tl
+             JOIN   employees e ON e.employee_id = tl.employee_id
              JOIN   attendance_status ast ON ast.status_id = tl.status_id
              WHERE  DATE(tl.clock_in) = '$dayStr'
-             AND    LOWER(ast.status_label) LIKE '%late%'"
+             AND    LOWER(ast.status_label) LIKE '%late%'{$deptFilterE}"
         )->fetchColumn();
 
         // Absent = active employees who didn't clock in and weren't on approved leave
         $approvedLeave = (int)$pdo->query(
-            "SELECT COUNT(DISTINCT employee_id)
-             FROM   leave_records
-             WHERE  leave_status = 'Approved'
-             AND    date_from <= '$dayStr'
-             AND    date_to   >= '$dayStr'"
+            "SELECT COUNT(DISTINCT lr.employee_id)
+             FROM   leave_records lr
+             JOIN   employees e ON e.employee_id = lr.employee_id
+             WHERE  lr.leave_status = 'Approved'
+             AND    lr.date_from <= '$dayStr'
+             AND    lr.date_to   >= '$dayStr'{$deptFilterE}"
         )->fetchColumn();
         $absentCnt = max(0, $activeEmployees - ($presentCnt + $lateCnt) - $approvedLeave);
 
@@ -155,7 +171,7 @@ if (currentAccessLevel() === 'admin') {
         ];
     }
 
-    json_ok([
+    return [
         'today'              => $today,
         'headcount'          => [
             'total_employees'  => $totalEmployees,
@@ -168,8 +184,25 @@ if (currentAccessLevel() === 'admin') {
         'pending_leaves'     => $pendingLeaves,
         'departments'        => $departments,
         'recent_clock_ins'   => $recentClockIns,
-        'weekly_attendance'  => $weeklyAttendance,    // ← NEW (TSK-36)
-    ]);
+        'weekly_attendance'  => $weeklyAttendance,    // TSK-36
+    ];
+}
+
+$level = currentAccessLevel();
+
+// SYSTEM ADMIN / PAYROLL ADMIN — company-wide dashboard
+if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
+    json_ok(buildAdminDashboard($pdo, $today, null));
+}
+
+// SUPERVISOR — same dashboard, scoped to their own department
+if ($level === 'supervisor') {
+    $deptId = currentDepartmentId();
+    if ($deptId === null) {
+        // Supervisor with no department on record — nothing to scope to.
+        json_ok(buildAdminDashboard($pdo, $today, 0));
+    }
+    json_ok(buildAdminDashboard($pdo, $today, $deptId));
 }
 
 // EMPLOYEE DASHBOARD

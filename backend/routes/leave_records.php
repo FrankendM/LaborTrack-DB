@@ -15,7 +15,29 @@ if ($method === 'GET') {
     $where  = [];
     $params = [];
 
-    if (currentAccessLevel() !== 'admin') {
+    $level = currentAccessLevel();
+
+    if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
+        if (!empty($_GET['employee_id'])) { $where[] = 'lr.employee_id = ?'; $params[] = (int)$_GET['employee_id']; }
+        if (!empty($_GET['status']))      { $where[] = 'lr.leave_status = ?'; $params[] = $_GET['status']; }
+        // Admin-tier search by employee name or leave type
+        if (!empty($_GET['search'])) {
+            $where[]  = '(e.full_name LIKE ? OR lr.leave_type LIKE ?)';
+            $params[] = '%' . $_GET['search'] . '%';
+            $params[] = '%' . $_GET['search'] . '%';
+        }
+    } elseif ($level === 'supervisor') {
+        $deptId = currentDepartmentId();
+        if ($deptId === null) json_ok([]);
+        $where[]  = 'e.department_id = ?';
+        $params[] = $deptId;
+        if (!empty($_GET['status'])) { $where[] = 'lr.leave_status = ?'; $params[] = $_GET['status']; }
+        if (!empty($_GET['search'])) {
+            $where[]  = '(e.full_name LIKE ? OR lr.leave_type LIKE ?)';
+            $params[] = '%' . $_GET['search'] . '%';
+            $params[] = '%' . $_GET['search'] . '%';
+        }
+    } else {
         $where[]  = 'lr.employee_id = ?';
         $params[] = currentEmployeeId();
         // Employee can also filter by search (leave type)
@@ -24,15 +46,6 @@ if ($method === 'GET') {
             $params[] = '%' . $_GET['search'] . '%';
         }
         if (!empty($_GET['status'])) { $where[] = 'lr.leave_status = ?'; $params[] = $_GET['status']; }
-    } else {
-        if (!empty($_GET['employee_id'])) { $where[] = 'lr.employee_id = ?'; $params[] = (int)$_GET['employee_id']; }
-        if (!empty($_GET['status']))      { $where[] = 'lr.leave_status = ?'; $params[] = $_GET['status']; }
-        // Admin search by employee name or leave type
-        if (!empty($_GET['search'])) {
-            $where[]  = '(e.full_name LIKE ? OR lr.leave_type LIKE ?)';
-            $params[] = '%' . $_GET['search'] . '%';
-            $params[] = '%' . $_GET['search'] . '%';
-        }
     }
 
     $sql = 'SELECT lr.*, e.full_name
@@ -50,7 +63,7 @@ if ($method === 'GET') {
 if ($method === 'POST') {
     requireAuth();
     $body       = bodyJson();
-    $employeeId = currentAccessLevel() === 'admin'
+    $employeeId = in_array(currentAccessLevel(), ['system_admin', 'payroll_admin'], true)
                   ? intVal_($body, 'employee_id', currentEmployeeId())
                   : currentEmployeeId();
     $leaveType  = str($body, 'leave_type');
@@ -79,12 +92,26 @@ if ($method === 'PUT') {
     if (!$leaveId) json_err('leave_id is required.');
 
     $pdo  = getDB();
-    $stmt = $pdo->prepare('SELECT * FROM leave_records WHERE leave_id = ? LIMIT 1');
+    $stmt = $pdo->prepare(
+        'SELECT lr.*, e.department_id
+         FROM   leave_records lr
+         JOIN   employees e ON e.employee_id = lr.employee_id
+         WHERE  lr.leave_id = ? LIMIT 1'
+    );
     $stmt->execute([$leaveId]);
     $leave = $stmt->fetch();
     if (!$leave) json_err('Leave record not found.', 404);
 
-    if (currentAccessLevel() === 'admin') {
+    $level = currentAccessLevel();
+
+    if (in_array($level, ['system_admin', 'payroll_admin', 'supervisor'], true)) {
+        // Supervisor is limited to their own department and can never approve/reject their own request
+        if ($level === 'supervisor') {
+            if ((int)$leave['department_id'] !== currentDepartmentId()) json_err('Forbidden.', 403);
+            if ((int)$leave['employee_id'] === currentEmployeeId()) {
+                json_err('You cannot approve or reject your own leave request.');
+            }
+        }
         $newStatus = str($body, 'leave_status', $leave['leave_status']);
         if (!in_array($newStatus, ['Pending', 'Approved', 'Rejected'], true)) {
             json_err('leave_status must be Pending, Approved, or Rejected.');
@@ -132,7 +159,7 @@ if ($method === 'DELETE') {
     $leave = $stmt->fetch();
     if (!$leave) json_err('Leave record not found.', 404);
 
-    if (currentAccessLevel() !== 'admin') {
+    if (!in_array(currentAccessLevel(), ['system_admin', 'payroll_admin'], true)) {
         if ((int)$leave['employee_id'] !== currentEmployeeId()) json_err('Forbidden.', 403);
         if ($leave['leave_status'] !== 'Pending') json_err('Only pending requests can be cancelled.');
     }

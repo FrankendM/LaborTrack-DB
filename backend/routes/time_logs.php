@@ -59,7 +59,9 @@ if ($method === 'GET' && $action === '') {
     $where  = [];
     $params = [];
 
-    if (currentAccessLevel() === 'admin') {
+    $level = currentAccessLevel();
+
+    if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
         if (!empty($_GET['employee_id'])) {
             $where[]  = 'tl.employee_id = ?';
             $params[] = (int)$_GET['employee_id'];
@@ -73,6 +75,35 @@ if ($method === 'GET' && $action === '') {
             $params[] = '%' . $_GET['search'] . '%';
         }
         // Year/month filtering
+        if (!empty($_GET['year']) && !empty($_GET['month'])) {
+            $where[]  = 'YEAR(tl.clock_in) = ? AND MONTH(tl.clock_in) = ?';
+            $params[] = (int)$_GET['year'];
+            $params[] = (int)$_GET['month'];
+        } elseif (!empty($_GET['year'])) {
+            $where[]  = 'YEAR(tl.clock_in) = ?';
+            $params[] = (int)$_GET['year'];
+        }
+        if (!empty($_GET['from'])) {
+            $where[]  = 'DATE(tl.clock_in) >= ?';
+            $params[] = $_GET['from'];
+        }
+        if (!empty($_GET['to'])) {
+            $where[]  = 'DATE(tl.clock_in) <= ?';
+            $params[] = $_GET['to'];
+        }
+    } elseif ($level === 'supervisor') {
+        $deptId = currentDepartmentId();
+        if ($deptId === null) json_ok([]);
+        $where[]  = 'e.department_id = ?';
+        $params[] = $deptId;
+        if (!empty($_GET['employee_id'])) {
+            $where[]  = 'tl.employee_id = ?';
+            $params[] = (int)$_GET['employee_id'];
+        }
+        if (!empty($_GET['search'])) {
+            $where[]  = 'e.full_name LIKE ?';
+            $params[] = '%' . $_GET['search'] . '%';
+        }
         if (!empty($_GET['year']) && !empty($_GET['month'])) {
             $where[]  = 'YEAR(tl.clock_in) = ? AND MONTH(tl.clock_in) = ?';
             $params[] = (int)$_GET['year'];
@@ -204,7 +235,7 @@ if ($method === 'POST' && $action === 'clock_out') {
 
 //  PUT: admin edit 
 if ($method === 'PUT') {
-    if (currentAccessLevel() !== 'admin') json_err('Admins only.', 403);
+    requirePayrollAdmin();
 
     $body  = bodyJson();
     $logId = intVal_($body, 'log_id');
