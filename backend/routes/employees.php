@@ -9,17 +9,22 @@ header('Content-Type: application/json');
 
 $method = $_SERVER['REQUEST_METHOD'];
 
+// Shared base SELECT — joins department/role names for castEmployee().
+const EMPLOYEE_SELECT =
+    'SELECT e.*, d.department_name, r.role_name
+     FROM   employees e
+     LEFT   JOIN departments d ON d.department_id = e.department_id
+     LEFT   JOIN roles       r ON r.role_id       = e.role_id';
+
 // List employees
-if ($method === 'GET') {
+     if ($method === 'GET') {
     requireAuth();
-    $pdo   = getDB();
-    $level = currentAccessLevel();
+    $pdo = getDB();
 
-    // ── Single-employee lookup (?id=) ──────────────────────────────
     if (isset($_GET['id'])) {
-        $id           = (int)$_GET['id'];
+        $id = (int)$_GET['id'];
+        $level = currentAccessLevel();
         $isPrivileged = in_array($level, ['system_admin', 'payroll_admin'], true);
-
         if (!$isPrivileged && $id !== currentEmployeeId()) {
             // Supervisor may view employees in their own department
             if ($level === 'supervisor') {
@@ -34,13 +39,7 @@ if ($method === 'GET') {
             }
         }
 
-        $stmt = $pdo->prepare(
-            'SELECT e.*, d.department_name, r.role_name
-             FROM   employees e
-             LEFT   JOIN departments d ON d.department_id = e.department_id
-             LEFT   JOIN roles       r ON r.role_id       = e.role_id
-             WHERE  e.employee_id = ?'
-        );
+        $stmt = $pdo->prepare(EMPLOYEE_SELECT . ' WHERE e.employee_id = ?');
         $stmt->execute([$id]);
         $row = $stmt->fetch();
         if (!$row) json_err('Employee not found.', 404);
@@ -48,55 +47,21 @@ if ($method === 'GET') {
         json_ok(castEmployee($row));
     }
 
-    // ── List ────────────────────────────────────────────────────────
+    $level = currentAccessLevel();
+
     if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
-        $search = $_GET['search'] ?? '';
-        $deptId = intVal_($_GET, 'department_id');
-
-        $sql = 'SELECT e.*, d.department_name, r.role_name
-                FROM   employees e
-                LEFT   JOIN departments d ON d.department_id = e.department_id
-                LEFT   JOIN roles       r ON r.role_id       = e.role_id
-                WHERE  1=1';
-        $params = [];
-
-        if ($search !== '') {
-            $sql .= ' AND (e.full_name LIKE ? OR e.email LIKE ?)';
-            $params[] = "%{$search}%";
-            $params[] = "%{$search}%";
-        }
-        if ($deptId) {
-            $sql .= ' AND e.department_id = ?';
-            $params[] = $deptId;
-        }
-        $sql .= ' ORDER BY e.full_name';
-
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
+        $stmt = $pdo->query(EMPLOYEE_SELECT . ' ORDER BY e.full_name');
         $rows = $stmt->fetchAll();
     } elseif ($level === 'supervisor') {
         $deptId = currentDepartmentId();
         if ($deptId === null) json_ok([]);
-        $stmt = $pdo->prepare(
-            'SELECT e.*, d.department_name, r.role_name
-             FROM   employees e
-             LEFT   JOIN departments d ON d.department_id = e.department_id
-             LEFT   JOIN roles       r ON r.role_id       = e.role_id
-             WHERE  e.department_id = ?
-             ORDER  BY e.full_name'
-        );
+        $stmt = $pdo->prepare(EMPLOYEE_SELECT . ' WHERE e.department_id = ? ORDER BY e.full_name');
         $stmt->execute([$deptId]);
         $rows = $stmt->fetchAll();
     } elseif (currentEmployeeId() === null) {
         json_ok([]);
     } else {
-        $stmt = $pdo->prepare(
-            'SELECT e.*, d.department_name, r.role_name
-             FROM   employees e
-             LEFT   JOIN departments d ON d.department_id = e.department_id
-             LEFT   JOIN roles       r ON r.role_id       = e.role_id
-             WHERE  e.employee_id = ?'
-        );
+        $stmt = $pdo->prepare(EMPLOYEE_SELECT . ' WHERE e.employee_id = ?');
         $stmt->execute([currentEmployeeId()]);
         $rows = $stmt->fetchAll();
     }
