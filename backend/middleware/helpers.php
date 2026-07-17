@@ -81,22 +81,23 @@ function floatVal_(array $body, string $key, float $default = 0.0): float {
 }
 
 // Auth helpers 
-function isLoggedIn(): bool          { return isset($_SESSION['account_id']); }
-function currentAccountId(): ?int    { return $_SESSION['account_id']   ?? null; }
-function currentEmployeeId(): ?int   { return $_SESSION['employee_id']  ?? null; }
+function isLoggedIn(): bool            { return isset($_SESSION['account_id']); }
+function currentAccountId(): ?int      { return $_SESSION['account_id']   ?? null; }
+function currentEmployeeId(): ?int     { return $_SESSION['employee_id']  ?? null; }
 function currentAccessLevel(): ?string { return $_SESSION['access_level'] ?? null; }
-
 function currentDepartmentId(): ?int {
-    static $deptId = null;
-    static $loaded = false;
+    static $deptId  = null;
+    static $loaded  = false;
     if ($loaded) return $deptId;
     $loaded = true;
+
     $empId = currentEmployeeId();
     if ($empId === null) return null;
+
     $stmt = getDB()->prepare('SELECT department_id FROM employees WHERE employee_id = ?');
     $stmt->execute([$empId]);
     $row = $stmt->fetch();
-    $deptId = $row && $row['department_id'] !== null ? (int)$row['department_id'] : null;
+    $deptId = ($row && $row['department_id'] !== null) ? (int)$row['department_id'] : null;
     return $deptId;
 }
 
@@ -104,6 +105,7 @@ function requireAuth(): void {
     if (!isLoggedIn()) json_err('Authentication required.', 401);
 }
 
+// Generic — pass any set of allowed access_level values
 function requireRole(array $allowed): void {
     requireAuth();
     if (!in_array(currentAccessLevel(), $allowed, true)) {
@@ -115,7 +117,7 @@ function requireSystemAdmin(): void {
     requireRole(['system_admin']);
 }
 
-function requireSupervisor(): void{
+function requireSupervisor(): void {
     requireRole(['supervisor', 'system_admin']);
 }
 
