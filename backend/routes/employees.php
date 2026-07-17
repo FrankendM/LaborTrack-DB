@@ -50,7 +50,23 @@ const EMPLOYEE_SELECT =
     $level = currentAccessLevel();
 
     if (in_array($level, ['system_admin', 'payroll_admin'], true)) {
-        $stmt = $pdo->query(EMPLOYEE_SELECT . ' ORDER BY e.full_name');
+        // TSK-42: admin-tier search (name or email) and department filter
+        $where  = [];
+        $params = [];
+        if (!empty($_GET['search'])) {
+            $where[]  = '(e.full_name LIKE ? OR e.email LIKE ?)';
+            $params[] = '%' . $_GET['search'] . '%';
+            $params[] = '%' . $_GET['search'] . '%';
+        }
+        if (!empty($_GET['department_id'])) {
+            $where[]  = 'e.department_id = ?';
+            $params[] = (int)$_GET['department_id'];
+        }
+        $sql = EMPLOYEE_SELECT
+             . (count($where) ? ' WHERE ' . implode(' AND ', $where) : '')
+             . ' ORDER BY e.full_name';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
         $rows = $stmt->fetchAll();
     } elseif ($level === 'supervisor') {
         $deptId = currentDepartmentId();
