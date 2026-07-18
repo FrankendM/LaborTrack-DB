@@ -43,6 +43,8 @@ if ($method === 'POST' && $action === 'login') {
     $_SESSION['access_level'] = $acc['access_level'];
     $_SESSION['username']     = $acc['username'];
 
+    logAudit($pdo, 'login', 'account', (int)$acc['account_id'], ['username' => $acc['username']]);
+
     json_ok([
         'account_id'   => (int)$acc['account_id'],
         'employee_id'  => $acc['employee_id'] !== null ? (int)$acc['employee_id'] : null,
@@ -98,6 +100,8 @@ if ($method === 'POST' && $action === 'change_password') {
     $newHash = password_hash($newPassword, PASSWORD_DEFAULT);
     $pdo->prepare('UPDATE accounts SET password_hash = ? WHERE account_id = ?')
         ->execute([$newHash, currentAccountId()]);
+
+    logAudit($pdo, 'password_reset', 'account', currentAccountId(), ['method' => 'self_service']);
 
     json_ok(['message' => 'Password changed successfully.']);
 }

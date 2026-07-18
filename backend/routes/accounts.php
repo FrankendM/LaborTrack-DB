@@ -15,13 +15,13 @@ if ($method === 'GET') {
     $pdo  = getDB();
     $search = $_GET['search'] ?? '';
     $sql = 'SELECT a.account_id, a.employee_id, a.username, a.email, a.access_level,
-                   e.full_name
+                   CONCAT(e.first_name, " ", e.last_name) AS full_name
             FROM   accounts a
             LEFT   JOIN employees e ON e.employee_id = a.employee_id
             WHERE  1=1';
     $params = [];
     if ($search !== '') {
-        $sql .= ' AND (a.username LIKE ? OR e.full_name LIKE ? OR a.email LIKE ?)';
+        $sql .= ' AND (a.username LIKE ? OR CONCAT(e.first_name, " ", e.last_name) LIKE ? OR a.email LIKE ?)';
         $params[] = "%{$search}%";
         $params[] = "%{$search}%";
         $params[] = "%{$search}%";

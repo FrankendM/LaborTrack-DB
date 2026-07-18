@@ -284,6 +284,11 @@ if ($method === 'PUT') {
             $claimId,
         ]);
 
+        logAudit($pdo, 'claim_validation', 'time_log_claim', $claimId, [
+            'from_status_id' => (int)$claim['validation_status_id'],
+            'to_status_id'   => $newStatusId,
+        ]);
+
         $sel = $pdo->prepare(CLAIM_SELECT . ' WHERE c.claim_id = ?');
         $sel->execute([$claimId]);
         json_ok(castClaim($sel->fetch()));

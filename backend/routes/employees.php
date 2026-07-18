@@ -185,6 +185,13 @@ if ($method === 'POST') {
         'Initial employment history record'
     ]);
 
+    logAudit($pdo, 'employee_create', 'employee', $newEmpId, [
+        'first_name' => $firstName,
+        'last_name'  => $lastName,
+        'department_id' => intVal_($body, 'department_id') ?: null,
+        'role_id'       => intVal_($body, 'role_id') ?: null,
+    ]);
+
     json_ok(['employee_id' => $newEmpId, 'message' => 'Employee created.']);
 }
 
@@ -231,6 +238,10 @@ if ($method === 'PUT') {
     $oldRoleId   = $existing['role_id'] !== null ? (int)$existing['role_id'] : null;
     $oldStatusId = $existing['employment_status_id'] !== null ? (int)$existing['employment_status_id'] : null;
     $oldTypeId   = $existing['employment_type_id'] !== null ? (int)$existing['employment_type_id'] : null;
+    $oldScheduleId = $existing['schedule_id'] !== null ? (int)$existing['schedule_id'] : null;
+    $newScheduleId = array_key_exists('schedule_id', $body)
+        ? (intVal_($body, 'schedule_id') ?: null)
+        : $oldScheduleId;
 
     $pdo->prepare(
         'UPDATE employees
@@ -248,11 +259,22 @@ if ($method === 'PUT') {
         str($body, 'hire_date', $existing['hire_date']),
         $newStatusId,
         $newTypeId,
-        array_key_exists('schedule_id', $body)
-            ? (intVal_($body, 'schedule_id') ?: null)
-            : ($existing['schedule_id'] !== null ? (int)$existing['schedule_id'] : null),
+        $newScheduleId,
         $id,
     ]);
+
+    logAudit($pdo, 'employee_update', 'employee', $id, [
+        'department_id'        => ['from' => $oldDeptId, 'to' => $newDeptId],
+        'role_id'               => ['from' => $oldRoleId, 'to' => $newRoleId],
+        'employment_status_id'  => ['from' => $oldStatusId, 'to' => $newStatusId],
+        'employment_type_id'    => ['from' => $oldTypeId, 'to' => $newTypeId],
+    ]);
+
+    if ($newScheduleId !== $oldScheduleId) {
+        logAudit($pdo, 'schedule_assignment', 'employee', $id, [
+            'schedule_id' => ['from' => $oldScheduleId, 'to' => $newScheduleId],
+        ]);
+    }
 
     // Check if critical parameters changed to log history
     if ($newDeptId !== $oldDeptId || $newRoleId !== $oldRoleId || $newStatusId !== $oldStatusId || $newTypeId !== $oldTypeId) {
@@ -281,23 +303,11 @@ if ($method === 'PUT') {
     json_ok(['message' => 'Employee updated.']);
 }
 
-// DELETE
+// DELETE — disabled. Employee records must never be hard-deleted; process
+// separations through POST /employee_exits.php, which sets employment_status_id
+// and preserves full history instead.
 if ($method === 'DELETE') {
-    requireSystemAdmin();
-
-    $id = intVal_($_GET, 'id');
-    if (!$id) {
-        json_err('id query param is required.');
-    }
-
-    $pdo  = getDB();
-    $stmt = $pdo->prepare('DELETE FROM employees WHERE employee_id = ?');
-    $stmt->execute([$id]);
-    if ($stmt->rowCount() === 0) {
-        json_err('Employee not found.', 404);
-    }
-
-    json_ok(['message' => 'Employee deleted.']);
+    json_err('Employees cannot be deleted. Use the employee exit process instead.', 405);
 }
 
 json_err('Method not allowed.', 405);

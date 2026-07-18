@@ -256,6 +256,19 @@ if ($method === 'PUT') {
                 : ($leave['leave_hours'] !== null ? (float)$leave['leave_hours'] : null)
         );
 
+        // Reject approval if the employee's remaining balance can't cover it.
+        $oldStatusIdCheck = $leave['leave_status_id'] !== null ? (int)$leave['leave_status_id'] : 1;
+        if ($oldStatusIdCheck !== 2 && $newStatusId === 2) {
+            $checkYear    = (int)date('Y', strtotime($dateFrom));
+            $checkDays    = $leaveHours / 8.0;
+            $checkBalStmt = $pdo->prepare('SELECT remaining_days FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?');
+            $checkBalStmt->execute([(int)$leave['employee_id'], $leaveTypeId, $checkYear]);
+            $checkBal = $checkBalStmt->fetch();
+            if ($checkBal && (float)$checkBal['remaining_days'] < $checkDays) {
+                json_err('Insufficient leave balance for this request.');
+            }
+        }
+
         $pdo->prepare(
             'UPDATE leave_records
              SET leave_type_id = ?, leave_status_id = ?, date_from = ?, date_to = ?,
@@ -320,6 +333,11 @@ if ($method === 'PUT') {
                 $updStmt->execute([$newUsed, $newRem, $balance['balance_id']]);
             }
         }
+
+        logAudit($pdo, 'leave_approval', 'leave_record', $leaveId, [
+            'from_status_id' => $oldStatusId,
+            'to_status_id'   => $newStatusId,
+        ]);
 
         json_ok(['message' => 'Leave record updated.']);
     }
