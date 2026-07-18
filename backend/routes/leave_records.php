@@ -272,6 +272,55 @@ if ($method === 'PUT') {
             $leaveId,
         ]);
 
+        // Sync leave balances
+        $oldStatusId = $leave['leave_status_id'] !== null ? (int)$leave['leave_status_id'] : 1;
+        if ($oldStatusId !== 2 && $newStatusId === 2) {
+            // Approving leave request! Increment used days
+            $empId = (int)$leave['employee_id'];
+            $leaveYear = (int)date('Y', strtotime($dateFrom));
+            $daysUsed = $leaveHours / 8.0;
+
+            $balStmt = $pdo->prepare('SELECT * FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?');
+            $balStmt->execute([$empId, $leaveTypeId, $leaveYear]);
+            $balance = $balStmt->fetch();
+
+            if ($balance) {
+                $newUsed = (float)$balance['used_days'] + $daysUsed;
+                $newRem  = (float)$balance['entitled_days'] + (float)$balance['carried_over_days'] - $newUsed;
+                $updStmt = $pdo->prepare('UPDATE leave_balances SET used_days = ?, remaining_days = ? WHERE balance_id = ?');
+                $updStmt->execute([$newUsed, $newRem, $balance['balance_id']]);
+            } else {
+                $typeStmt = $pdo->prepare('SELECT max_days_per_year FROM leave_types WHERE leave_type_id = ?');
+                $typeStmt->execute([$leaveTypeId]);
+                $typeRow = $typeStmt->fetch();
+                $entitled = $typeRow ? (float)($typeRow['max_days_per_year'] ?? 15.0) : 15.0;
+
+                $newRem = $entitled - $daysUsed;
+                $insStmt = $pdo->prepare(
+                    'INSERT INTO leave_balances 
+                        (employee_id, leave_type_id, year, entitled_days, carried_over_days, used_days, remaining_days)
+                     VALUES (?, ?, ?, ?, 0.0, ?, ?)'
+                );
+                $insStmt->execute([$empId, $leaveTypeId, $leaveYear, $entitled, $daysUsed, $newRem]);
+            }
+        } elseif ($oldStatusId === 2 && $newStatusId !== 2) {
+            // Reverting approval! Deduct used days
+            $empId = (int)$leave['employee_id'];
+            $leaveYear = (int)date('Y', strtotime($leave['date_from']));
+            $daysUsed = ($leave['leave_hours'] !== null ? (float)$leave['leave_hours'] : 0.0) / 8.0;
+
+            $balStmt = $pdo->prepare('SELECT * FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?');
+            $balStmt->execute([$empId, (int)$leave['leave_type_id'], $leaveYear]);
+            $balance = $balStmt->fetch();
+
+            if ($balance) {
+                $newUsed = max(0.0, (float)$balance['used_days'] - $daysUsed);
+                $newRem  = (float)$balance['entitled_days'] + (float)$balance['carried_over_days'] - $newUsed;
+                $updStmt = $pdo->prepare('UPDATE leave_balances SET used_days = ?, remaining_days = ? WHERE balance_id = ?');
+                $updStmt->execute([$newUsed, $newRem, $balance['balance_id']]);
+            }
+        }
+
         json_ok(['message' => 'Leave record updated.']);
     }
 

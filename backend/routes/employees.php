@@ -167,7 +167,25 @@ if ($method === 'POST') {
         currentAccountId(),
     ]);
 
-    json_ok(['employee_id' => (int)$pdo->lastInsertId(), 'message' => 'Employee created.']);
+    $newEmpId = (int)$pdo->lastInsertId();
+
+    $historyStmt = $pdo->prepare(
+        'INSERT INTO employment_history 
+            (employee_id, department_id, role_id, employment_status_id, employment_type_id, changed_by_account_id, effective_from, effective_to, remarks)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)'
+    );
+    $historyStmt->execute([
+        $newEmpId,
+        intVal_($body, 'department_id') ?: null,
+        intVal_($body, 'role_id')       ?: null,
+        $statusId,
+        intVal_($body, 'employment_type_id') ?: null,
+        currentAccountId(),
+        $hireDate,
+        'Initial employment history record'
+    ]);
+
+    json_ok(['employee_id' => $newEmpId, 'message' => 'Employee created.']);
 }
 
 // PUT: update
@@ -202,6 +220,18 @@ if ($method === 'PUT') {
         $existing['employment_status_id'] !== null ? (int)$existing['employment_status_id'] : null
     );
 
+    $newDeptId   = intVal_($body, 'department_id') ?: null;
+    $newRoleId   = intVal_($body, 'role_id')       ?: null;
+    $newStatusId = $statusId;
+    $newTypeId   = array_key_exists('employment_type_id', $body)
+        ? (intVal_($body, 'employment_type_id') ?: null)
+        : ($existing['employment_type_id'] !== null ? (int)$existing['employment_type_id'] : null);
+
+    $oldDeptId   = $existing['department_id'] !== null ? (int)$existing['department_id'] : null;
+    $oldRoleId   = $existing['role_id'] !== null ? (int)$existing['role_id'] : null;
+    $oldStatusId = $existing['employment_status_id'] !== null ? (int)$existing['employment_status_id'] : null;
+    $oldTypeId   = $existing['employment_type_id'] !== null ? (int)$existing['employment_type_id'] : null;
+
     $pdo->prepare(
         'UPDATE employees
          SET department_id = ?, role_id = ?, first_name = ?, last_name = ?, email = ?,
@@ -209,22 +239,44 @@ if ($method === 'PUT') {
              employment_type_id = ?, schedule_id = ?
          WHERE employee_id = ?'
     )->execute([
-        intVal_($body, 'department_id') ?: null,
-        intVal_($body, 'role_id')       ?: null,
+        $newDeptId,
+        $newRoleId,
         $firstName,
         $lastName,
         str($body, 'email')      ?: null,
         str($body, 'contact_no') ?: null,
         str($body, 'hire_date', $existing['hire_date']),
-        $statusId,
-        array_key_exists('employment_type_id', $body)
-            ? (intVal_($body, 'employment_type_id') ?: null)
-            : ($existing['employment_type_id'] !== null ? (int)$existing['employment_type_id'] : null),
+        $newStatusId,
+        $newTypeId,
         array_key_exists('schedule_id', $body)
             ? (intVal_($body, 'schedule_id') ?: null)
             : ($existing['schedule_id'] !== null ? (int)$existing['schedule_id'] : null),
         $id,
     ]);
+
+    // Check if critical parameters changed to log history
+    if ($newDeptId !== $oldDeptId || $newRoleId !== $oldRoleId || $newStatusId !== $oldStatusId || $newTypeId !== $oldTypeId) {
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        $closeStmt = $pdo->prepare('UPDATE employment_history SET effective_to = ? WHERE employee_id = ? AND effective_to IS NULL');
+        $closeStmt->execute([$yesterday, $id]);
+
+        $today = date('Y-m-d');
+        $historyStmt = $pdo->prepare(
+            'INSERT INTO employment_history 
+                (employee_id, department_id, role_id, employment_status_id, employment_type_id, changed_by_account_id, effective_from, effective_to, remarks)
+             VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)'
+        );
+        $historyStmt->execute([
+            $id,
+            $newDeptId,
+            $newRoleId,
+            $newStatusId,
+            $newTypeId,
+            currentAccountId(),
+            $today,
+            'Auto-logged on employee details update'
+        ]);
+    }
 
     json_ok(['message' => 'Employee updated.']);
 }
