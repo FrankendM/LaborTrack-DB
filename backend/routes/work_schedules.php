@@ -14,33 +14,46 @@ if ($method === 'GET') {
     $rows = getDB()->query(
         'SELECT ws.*, COUNT(e.employee_id) AS employee_count
          FROM   work_schedules ws
-         LEFT   JOIN employees e ON e.employment_status = ws.schedule_name
+         LEFT   JOIN employees e ON e.schedule_id = ws.schedule_id
          GROUP  BY ws.schedule_id
          ORDER  BY ws.schedule_name'
     )->fetchAll();
     json_ok(array_map(fn($r) => [
-        'schedule_id'    => (int)$r['schedule_id'],
-        'schedule_name'  => $r['schedule_name'],
-        'start_time'     => $r['start_time'],
-        'end_time'       => $r['end_time'],
-        'employee_count' => (int)$r['employee_count'],
+        'schedule_id'        => (int)$r['schedule_id'],
+        'schedule_name'      => $r['schedule_name'],
+        'start_time'         => $r['start_time'],
+        'end_time'           => $r['end_time'],
+        'break_minutes'      => (int)$r['break_minutes'],
+        'required_hours'     => (float)$r['required_hours'],
+        'grace_minutes'      => (int)$r['grace_minutes'],
+        'late_after_minutes' => (int)$r['late_after_minutes'],
+        'rest_day'           => $r['rest_day'],
+        'employee_count'     => (int)$r['employee_count'],
     ], $rows));
 }
 
 // POST — create
 if ($method === 'POST') {
     requireSystemAdmin();
-    $body = bodyJson();
+    $body  = bodyJson();
     $name  = str($body, 'schedule_name');
     $start = str($body, 'start_time');
     $end   = str($body, 'end_time');
     if ($name  === '') json_err('schedule_name is required.');
     if ($start === '') json_err('start_time is required.');
     if ($end   === '') json_err('end_time is required.');
+
+    $breakMin = intVal_($body, 'break_minutes', 60);
+    $reqHours = floatVal_($body, 'required_hours', 8.00);
+    $graceMin = intVal_($body, 'grace_minutes', 15);
+    $lateMin  = intVal_($body, 'late_after_minutes', 15);
+    $restDay  = str($body, 'rest_day', 'Sunday');
+    if ($restDay === '') $restDay = 'Sunday';
+
     $pdo = getDB();
     $pdo->prepare(
-        'INSERT INTO work_schedules (schedule_name, start_time, end_time) VALUES (?, ?, ?)'
-    )->execute([$name, $start, $end]);
+        'INSERT INTO work_schedules (schedule_name, start_time, end_time, break_minutes, required_hours, grace_minutes, late_after_minutes, rest_day) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([$name, $start, $end, $breakMin, $reqHours, $graceMin, $lateMin, $restDay]);
     json_ok(['schedule_id' => (int)$pdo->lastInsertId(), 'message' => 'Work schedule created.']);
 }
 
@@ -56,11 +69,18 @@ if ($method === 'PUT') {
     if ($name  === '') json_err('schedule_name is required.');
     if ($start === '') json_err('start_time is required.');
     if ($end   === '') json_err('end_time is required.');
+
+    $breakMin = intVal_($body, 'break_minutes', 60);
+    $reqHours = floatVal_($body, 'required_hours', 8.00);
+    $graceMin = intVal_($body, 'grace_minutes', 15);
+    $lateMin  = intVal_($body, 'late_after_minutes', 15);
+    $restDay  = str($body, 'rest_day', 'Sunday');
+    if ($restDay === '') $restDay = 'Sunday';
+
     $stmt = getDB()->prepare(
-        'UPDATE work_schedules SET schedule_name = ?, start_time = ?, end_time = ? WHERE schedule_id = ?'
+        'UPDATE work_schedules SET schedule_name = ?, start_time = ?, end_time = ?, break_minutes = ?, required_hours = ?, grace_minutes = ?, late_after_minutes = ?, rest_day = ? WHERE schedule_id = ?'
     );
-    $stmt->execute([$name, $start, $end, $id]);
-    if ($stmt->rowCount() === 0) json_err('Work schedule not found.', 404);
+    $stmt->execute([$name, $start, $end, $breakMin, $reqHours, $graceMin, $lateMin, $restDay, $id]);
     json_ok(['message' => 'Work schedule updated.']);
 }
 
