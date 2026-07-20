@@ -159,6 +159,75 @@ if ($method === 'POST' && ($_GET['action'] ?? '') === 'rollover') {
     ]);
 }
 
+// POST ?action=reset — full year-end reset (no carryover). Creates a
+// balance row for EVERY active employee, for EVERY leave type, regardless
+// of whether they had a balance in a prior year. entitled_days comes from
+// leave_types.max_days_per_year; carried_over_days and used_days both
+// start at 0. Skips any employee/type/year combo that already has a row.
+if ($method === 'POST' && ($_GET['action'] ?? '') === 'reset') {
+    requireHumanResources();
+    $body = bodyJson();
+    $year = intVal_($body, 'year');
+
+    if (!$year) json_err('year is required.');
+
+    $pdo = getDB();
+
+    $empStmt = $pdo->prepare(
+        "SELECT e.employee_id
+         FROM   employees e
+         JOIN   employment_status es ON es.employment_status_id = e.employment_status_id
+         WHERE  es.status_name = 'Active'"
+    );
+    $empStmt->execute();
+    $employees = $empStmt->fetchAll(PDO::FETCH_COLUMN);
+
+    $typeStmt = $pdo->prepare('SELECT leave_type_id, max_days_per_year FROM leave_types');
+    $typeStmt->execute();
+    $leaveTypes = $typeStmt->fetchAll();
+
+    $created = 0;
+    $skipped = 0;
+
+    $chkStmt = $pdo->prepare(
+        'SELECT balance_id FROM leave_balances WHERE employee_id = ? AND leave_type_id = ? AND year = ?'
+    );
+    $insStmt = $pdo->prepare(
+        'INSERT INTO leave_balances
+            (employee_id, leave_type_id, year, entitled_days, carried_over_days, used_days, remaining_days)
+         VALUES (?, ?, ?, ?, 0.0, 0.0, ?)'
+    );
+
+    foreach ($employees as $empId) {
+        foreach ($leaveTypes as $lt) {
+            $typeId = (int)$lt['leave_type_id'];
+
+            $chkStmt->execute([$empId, $typeId, $year]);
+            if ($chkStmt->fetch()) {
+                $skipped++;
+                continue;
+            }
+
+            $entitled = (float)$lt['max_days_per_year'];
+            $insStmt->execute([$empId, $typeId, $year, $entitled, $entitled]);
+            $created++;
+        }
+    }
+
+    logAudit($pdo, 'leave_balance_create', 'leave_balance', null, [
+        'action'  => 'full_reset',
+        'year'    => $year,
+        'created' => $created,
+        'skipped' => $skipped,
+    ]);
+
+    json_ok([
+        'message' => "Reset {$created} balance(s) for {$year}" . ($skipped ? ", skipped {$skipped} already-existing." : "."),
+        'created' => $created,
+        'skipped' => $skipped,
+    ]);
+}
+
 // POST — create
 if ($method === 'POST') {
     requireHumanResources();
