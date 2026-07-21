@@ -85,7 +85,9 @@ if ($method === 'POST' && $action === 'change_password') {
 
     if ($currentPassword === '') json_err('current_password is required.');
     if ($newPassword     === '') json_err('new_password is required.');
-    if (strlen($newPassword) < 6) json_err('New password must be at least 6 characters.');
+
+    $strengthError = passwordStrengthError($newPassword);
+    if ($strengthError !== null) json_err($strengthError);
 
     $pdo  = getDB();
     $stmt = $pdo->prepare('SELECT password_hash FROM accounts WHERE account_id = ? LIMIT 1');
