@@ -58,11 +58,8 @@ if ($method === 'POST') {
     if (!in_array($accessLevel, ['employee', 'supervisor', 'human_resources', 'system_admin'], true)) {
         json_err('access_level must be employee, supervisor, human_resources, or system_admin.');
     }
-    if (strlen($password) < 6) json_err('Password must be at least 6 characters.');
-
-    $pdo = getDB();
-
-    $dupUser = $pdo->prepare('SELECT account_id FROM accounts WHERE username = ? LIMIT 1');
+    $strengthError = passwordStrengthError($password);
+    if ($strengthError !== null) json_err($strengthError);
     $dupUser->execute([$username]);
     if ($dupUser->fetch()) json_err('That username is already taken.');
 
@@ -142,7 +139,8 @@ if ($method === 'PUT') {
         if ($accessLevel !== $before['access_level']) $changed['access_level'] = ['from' => $before['access_level'], 'to' => $accessLevel];
     }
     if ($password !== '') {
-        if (strlen($password) < 6) json_err('Password must be at least 6 characters.');
+        $strengthError = passwordStrengthError($password);
+        if ($strengthError !== null) json_err($strengthError);
         $fields[] = 'password_hash = ?';
         $params[] = password_hash($password, PASSWORD_BCRYPT);
         $changed['password'] = ['from' => '(hidden)', 'to' => '(changed)'];
