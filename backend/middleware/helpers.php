@@ -165,6 +165,36 @@ function getOrCreateLeavePool(PDO $pdo, int $employeeId, int $year): array {
     return $stmt->fetch();
 }
 
+// ── Password strength ─────────────────────────────────────────────────────
+// Mirrors the client-side rule in utils.js (isPasswordStrongEnough):
+// at least 8 characters AND at least 3 of the 4 character classes
+// (lowercase, uppercase, digit, symbol). Returns null when strong enough,
+// or an error message describing what's missing.
+function passwordStrengthError(string $password): ?string {
+    if (strlen($password) < 8) {
+        return 'New password must be at least 8 characters.';
+    }
+
+    $hasLower   = (bool)preg_match('/[a-z]/', $password);
+    $hasUpper   = (bool)preg_match('/[A-Z]/', $password);
+    $hasDigit   = (bool)preg_match('/[0-9]/', $password);
+    $hasSpecial = (bool)preg_match('/[^A-Za-z0-9]/', $password);
+    $variety    = count(array_filter([$hasLower, $hasUpper, $hasDigit, $hasSpecial]));
+
+    if ($variety < 3) {
+        return 'Password is too weak. Use a mix of uppercase, lowercase, numbers, and symbols.';
+    }
+
+    $common = ['password', '123456', 'qwerty', 'letmein', '111111', '12345678'];
+    foreach ($common as $c) {
+        if (str_contains(strtolower($password), $c)) {
+            return 'Password is too common or predictable. Choose something less guessable.';
+        }
+    }
+
+    return null;
+}
+
 // ── Audit log ──────────────────────────────────────────────────────────────────
 // Writes one row to audit_log. Never throws out to the caller — a logging
 // failure should not block or roll back the action that triggered it, so
